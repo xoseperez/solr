@@ -33,8 +33,10 @@ cannot be connected to LED display while programming
 */
 
 #include "SevSeg.h"
-#include "I2Cdev.h"
-#include "HMC5883L.h"
+#include "Compass.h"
+#include "LowPower.h"
+
+#define DEBUG 1
 
 #define DIGITS 4
 #define BRIGHTNESS 100
@@ -53,33 +55,107 @@ cannot be connected to LED display while programming
 #define SEGMENT_G 16
 
 #define DECIMAL_POINT 0 // NC
-
+#define BUTTON_PIN 2
 #define UPDATE_INTERVAL 1000
+#define MIN_STABLE_COUNT 5
 
 // Seven segments display object
 SevSeg sevseg;
 
-// class default I2C address is 0x1E
-// specific I2C addresses may be passed as a parameter here
-// this device only supports one I2C address (0x1E)
-HMC5883L mag;
-
-// Holding string for display
-char display[5];
+// HMC5883L class
+Compass compass;
 
 // Current time for display
 unsigned long next_update;
 
-// Holding values for heading
-int16_t mx, my, mz;
+void showText(char * text, unsigned long ms = 0) {
+   unsigned long timeout = millis() + ms;
+   while (millis() < timeout) {
+      sevseg.DisplayString(text, 0);
+   }
+}
+
+void updateDisplay(bool showTime = true) {
+
+   byte count = 0;
+   int bearing = 0;
+   while (count < MIN_STABLE_COUNT) {
+      delay(20);
+      int tmp = compass.getBearing();
+      if (bearing == tmp) {
+         count++;
+      } else {
+         bearing = tmp;
+         count = 0;
+      }
+   }
+
+   int quarters = round((float) (bearing * 96) / 360.0);
+   int quarter = quarters % 4;
+   int hour = (quarters - quarter) / 4;
+   int minutes = quarter * 15;
+   char display[5];
+
+   if (showTime) {
+      sprintf(display, "%02i%02i", hour, minutes);
+   } else {
+      sprintf(display, "%03i!", bearing);
+   }
+
+   #if DEBUG == 1
+      Serial.print("Bearing: ");
+      Serial.println(bearing);
+      Serial.print("Hour: ");
+      if (hour < 10) Serial.print("0");
+      Serial.print(hour);
+      Serial.print(":");
+      if (minutes < 10) Serial.print("0");
+      Serial.println(minutes);
+      Serial.print("Display: ");
+      Serial.println(display);
+   #endif
+
+   showText(display, 2000);
+
+}
+
+void checkCalibration() {
+
+   if (digitalRead(BUTTON_PIN) == HIGH) {
+      delay(50);
+      if (digitalRead(BUTTON_PIN) == HIGH) {
+
+         // start calibration
+         showText(" SET", 1000);
+         showText("GAIN", 1000);
+         compass.calibrate(HMC5883L_CALIBRATE_GAIN);
+         showText("DONE", 1000);
+         showText("OFFS", 1000);
+         compass.calibrate(HMC5883L_CALIBRATE_OFFSET);
+         showText("DONE", 1000);
+
+      }
+   }
+
+}
+
+void wakeUp() {
+   // wake up
+}
 
 void setup() {
 
-   // join I2C bus (I2Cdev library doesn't do this automatically)
+   // Initialize debug console
+   #if DEBUG == 1
+      Serial.begin(9600);
+      while (!Serial);
+   #endif
+
+   // Join I2C bus
    Wire.begin();
 
    // Initialize compass
-   mag.initialize();
+   compass.initialize();
 
    // Configure seven segments display
    sevseg.Begin(
@@ -90,8 +166,12 @@ void setup() {
    );
    sevseg.SetBrightness(BRIGHTNESS);
 
-   // Default value
-   strncpy(display, "GOOD", 4);
+   // Show welcome text
+   showText("SOLR", 1000);
+
+   // Define button interrupt
+   pinMode(BUTTON_PIN, INPUT);
+   checkCalibration();
 
    // Next update time
    next_update = millis() + UPDATE_INTERVAL;
@@ -100,21 +180,17 @@ void setup() {
 
 void loop() {
 
-   // Update heading
-   if (millis() > next_update) {
+   // Allow wake up pin to trigger interrupt on low.
+   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), wakeUp, HIGH);
 
-      // read raw heading measurements from device
-      mag.getHeading(&mx, &my, &mz);
-      float heading = atan2(my, mx);
-      if (heading < 0)
-         heading += 2 * M_PI;
+   // Enter power down state with ADC and BOD module disabled.
+   // Wake up when wake up pin is low.
+   LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
 
-      sprintf (display, "%03i!", (int) (heading * 180/M_PI));
+   // Disable external pin interrupt on wake up pin.
+   detachInterrupt(digitalPinToInterrupt(BUTTON_PIN));
 
-      next_update += UPDATE_INTERVAL;
-
-   }
-
-    sevseg.DisplayString(display, 0);
+   // Show
+   updateDisplay();
 
 }
