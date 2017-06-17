@@ -150,7 +150,7 @@ void Compass::calibrate(byte mode) {
       float z_min = 4000;
       _x_offset = _y_offset = _z_offset = 0;
 
-      unsigned long timeout = millis() + 30000;
+      unsigned long timeout = millis() + 60000;
       while (millis() < timeout) {
          HMC5883L::getHeading(&x, &y, &z);
          x_max = max(x_max, x);

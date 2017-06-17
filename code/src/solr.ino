@@ -36,7 +36,7 @@ cannot be connected to LED display while programming
 #include "Compass.h"
 #include "LowPower.h"
 
-#define DEBUG 1
+#define DEBUG 0
 
 #define DIGITS 4
 #define BRIGHTNESS 100
@@ -57,7 +57,7 @@ cannot be connected to LED display while programming
 #define DECIMAL_POINT 0 // NC
 #define BUTTON_PIN 2
 #define UPDATE_INTERVAL 1000
-#define MIN_STABLE_COUNT 5
+#define MIN_STABLE_COUNT 20
 
 // Seven segments display object
 SevSeg sevseg;
@@ -69,53 +69,74 @@ Compass compass;
 unsigned long next_update;
 
 void showText(char * text, unsigned long ms = 0) {
-   unsigned long timeout = millis() + ms;
-   while (millis() < timeout) {
-      sevseg.DisplayString(text, 0);
-   }
+    unsigned long timeout = millis() + ms;
+    while (millis() < timeout) {
+        sevseg.DisplayString(text, 0);
+    }
+}
+
+void showText(const char * text, unsigned long ms = 0) {
+    showText((char *) text, ms);
+}
+
+int getBearing() {
+
+    byte count = 0;
+    int bearing = 0;
+
+    while (count < MIN_STABLE_COUNT) {
+       delay(20);
+       int tmp = compass.getBearing();
+       if (bearing == tmp) {
+          count++;
+       } else {
+          bearing = tmp;
+          count = 0;
+       }
+    }
+
+    return bearing;
+
 }
 
 void updateDisplay(bool showTime = true) {
 
-   byte count = 0;
-   int bearing = 0;
-   while (count < MIN_STABLE_COUNT) {
-      delay(20);
-      int tmp = compass.getBearing();
-      if (bearing == tmp) {
-         count++;
-      } else {
-         bearing = tmp;
-         count = 0;
-      }
-   }
+    // 0º is south, 90% west
+    int bearing = getBearing();
+    bearing = (bearing + 180) % 360;
 
-   int quarters = round((float) (bearing * 96) / 360.0);
-   int quarter = quarters % 4;
-   int hour = (quarters - quarter) / 4;
-   int minutes = quarter * 15;
-   char display[5];
+    // 4 minutes per degree
+    int minutes = 4 * bearing;
+    int quarters = minutes / 15;
+    int quarter = quarters % 4;
+    int hour = (quarters - quarter) / 4;
 
-   if (showTime) {
-      sprintf(display, "%02i%02i", hour, minutes);
-   } else {
-      sprintf(display, "%03i!", bearing);
-   }
+    minutes = minutes % 60;
+    minutes = (minutes / 5) * 5;
+    hour = (hour + 2) % 24;
 
-   #if DEBUG == 1
-      Serial.print("Bearing: ");
-      Serial.println(bearing);
-      Serial.print("Hour: ");
-      if (hour < 10) Serial.print("0");
-      Serial.print(hour);
-      Serial.print(":");
-      if (minutes < 10) Serial.print("0");
-      Serial.println(minutes);
-      Serial.print("Display: ");
-      Serial.println(display);
-   #endif
+    char display[5];
 
-   showText(display, 2000);
+    if (showTime) {
+        sprintf(display, "%02i%02i", hour, minutes);
+    } else {
+        sprintf(display, "%03i!", bearing);
+    }
+    showText(display, 5000);
+
+    #if DEBUG == 1
+        Serial.print("Bearing: ");
+        Serial.println(bearing);
+        Serial.print("Hour: ");
+        if (hour < 10) Serial.print("0");
+        Serial.print(hour);
+        Serial.print(":");
+        if (minutes < 10) Serial.print("0");
+        Serial.println(minutes);
+        Serial.print("Display: ");
+        Serial.println(display);
+    #endif
+
 
 }
 
@@ -145,52 +166,60 @@ void wakeUp() {
 
 void setup() {
 
-   // Initialize debug console
-   #if DEBUG == 1
-      Serial.begin(9600);
-      while (!Serial);
-   #endif
+    // Initialize debug console
+    #if DEBUG == 1
+        Serial.begin(9600);
+        while (!Serial);
+    #endif
 
-   // Join I2C bus
-   Wire.begin();
+    // Configure seven segments display
+    sevseg.Begin(
+        COMMON_CATHODE, DIGITS,
+        DIGIT_1, DIGIT_2, DIGIT_3, DIGIT_4,
+        SEGMENT_A, SEGMENT_B, SEGMENT_C, SEGMENT_D, SEGMENT_E, SEGMENT_F, SEGMENT_G,
+        DECIMAL_POINT
+    );
+    sevseg.SetBrightness(BRIGHTNESS);
 
-   // Initialize compass
-   compass.initialize();
+    // Join I2C bus
+    Wire.begin();
 
-   // Configure seven segments display
-   sevseg.Begin(
-      COMMON_CATHODE, DIGITS,
-      DIGIT_1, DIGIT_2, DIGIT_3, DIGIT_4,
-      SEGMENT_A, SEGMENT_B, SEGMENT_C, SEGMENT_D, SEGMENT_E, SEGMENT_F, SEGMENT_G,
-      DECIMAL_POINT
-   );
-   sevseg.SetBrightness(BRIGHTNESS);
+    // Test connection
+    if (!compass.testConnection()) {
+        showText("ERR1", 5000);
+        while (true);
+    }
 
-   // Show welcome text
-   showText("SOLR", 1000);
+    // Initialize compass
+    compass.initialize();
 
-   // Define button interrupt
-   pinMode(BUTTON_PIN, INPUT);
-   checkCalibration();
+    // Show welcome text
+    showText("SOLR", 2000);
 
-   // Next update time
-   next_update = millis() + UPDATE_INTERVAL;
+    // Define button interrupt
+    pinMode(BUTTON_PIN, INPUT);
+
+    // Check if calibration mode
+    checkCalibration();
+
+    // Next update time
+    next_update = millis() + UPDATE_INTERVAL;
 
 }
 
 void loop() {
 
-   // Allow wake up pin to trigger interrupt on low.
-   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), wakeUp, HIGH);
+    // Allow wake up pin to trigger interrupt on low.
+    attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), wakeUp, HIGH);
 
-   // Enter power down state with ADC and BOD module disabled.
-   // Wake up when wake up pin is low.
-   LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
+    // Enter power down state with ADC and BOD module disabled.
+    // Wake up when wake up pin is low.
+    LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
 
-   // Disable external pin interrupt on wake up pin.
-   detachInterrupt(digitalPinToInterrupt(BUTTON_PIN));
+    // Disable external pin interrupt on wake up pin.
+    detachInterrupt(digitalPinToInterrupt(BUTTON_PIN));
 
-   // Show
-   updateDisplay();
+    // Show
+    updateDisplay(true);
 
 }

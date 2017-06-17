@@ -1,6 +1,9 @@
 *.s#?
 *.b#?
 .modgit
-firmware*
-.pioenvs
+*.gch
+.pio*
+.clang_complete
+.gcc-flags.json
 .sconsign.dblite
+.build

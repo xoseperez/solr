@@ -1,0 +1,30 @@
+Partlist
+
+Exported from solr.brd at 4/16/17 9:12 PM
+
+EAGLE Version 8.0.1 Copyright (c) 1988-2017 Autodesk, Inc.
+
+Assembly variant: 
+
+Part     Value                Package              Library              Position (mil)        Orientation
+
+BATT                          CR2032-SMD           xose                 (650 800)             MR180
+C1       100nf                C0805                Seeed-Capacitor-2016 (100 970)             R90
+C2       4.7uf                AVX-A                Seeed-Capacitor-2016 (1210 1145)           R270
+C3       220nf                C0805                Seeed-Capacitor-2016 (1210 1310)           R270
+C4       100nf                C0805                Seeed-Capacitor-2016 (1210 1425)           R270
+CHECK                         BTN_CK_KSS           adafruit             (1200 530)            R90
+IC1      ATMEGA328P-AU-TQFP32 TQFP32-0.8-7X7MM     Seeed-IC-2016        (300 1200)            R0
+IC2      HMC5883L             PLCC16-0.5-3X3MM     Seeed-Sensor-2016    (962.5 1262.5)        R0
+J1       ISP                  2X3EDGE              xose                 (100 480)             R270
+JP1                           1X04_SMD_ROUND_PADS  xose                 (60 1415)             MR90
+LED1     5082-7414            5082-7414            xose                 (400 380)             R0
+R1       220R                 R0805                Seeed-Resistor-2016  (415 830)             R90
+R2       220R                 R0805                Seeed-Resistor-2016  (500 970)             R90
+R3       220R                 R0805                Seeed-Resistor-2016  (750 1115)            R0
+R4       220R                 R0805                Seeed-Resistor-2016  (1040 290)            R90
+R5       2.2K                 R0805                Seeed-Resistor-2016  (840 1310)            R270
+R6       2.2K                 R0805                Seeed-Resistor-2016  (840 1425)            R270
+R7       4.7K                 R0805                Seeed-Resistor-2016  (1190 290)            R90
+U$1      M3_WELDING_NUTFLAT   M3_WELDING_NUT_FLAT  xose                 (650 1345)            MR0
+U$2      M3_WELDING_NUTSTAND  M3_WELDING_NUT_STAND xose                 (1150 1437.5)         MR0
